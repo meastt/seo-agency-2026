@@ -215,16 +215,164 @@ def transform_post_flow(post_id: int = None):
     console.print("[bold]🔄 GEO Transformation[/bold]")
     console.print()
     
+    # Import GEO modules
+    from modules.geo.rewriter import GEORewriter
+    from modules.geo.schema_generator import SchemaGenerator, generate_schema_for_content
+    from modules.geo.freshness import ContentFreshness
+    from core.wp_api import update_post, create_backup
+    
     if post_id is None:
         post_id = IntPrompt.ask("Enter post ID to transform")
     
-    console.print("[yellow]⚠ GEO transformation module coming soon![/yellow]")
-    console.print("This will:")
-    console.print("  • Add an Answer Capsule (120-150 chars)")
-    console.print("  • Restructure for Inverted Pyramid")
-    console.print("  • Inject first-person experience signals")
-    console.print("  • Generate JSON-LD schema")
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Fetching post from WordPress...", total=None)
+            post_data = quick_fetch(post_id)
+            progress.update(task, description="[green]✓ Post fetched[/green]")
+        
+        content = post_data.get("content", {}).get("rendered", "")
+        title = post_data.get("title", {}).get("rendered", "Untitled")
+        
+        console.print(f"\n[bold]Post:[/bold] {title}")
+        console.print(f"[dim]ID: {post_id} | Content length: {len(content)} chars[/dim]\n")
+        
+    except Exception as e:
+        console.print(f"[red]Error fetching post: {e}[/red]")
+        return
+    
+    # First, run audit to show current state
+    console.print("[bold]Current GEO Score[/bold]")
+    result = audit_content(content, title)
+    _display_quick_score(result)
+    
+    # Ask for Answer Capsule
     console.print()
+    answer_capsule = Prompt.ask(
+        "[cyan]Enter Answer Capsule (120-150 chars)[/cyan]\n"
+        "[dim]This is the quick answer that appears right after the title.[/dim]\n"
+        "[dim]Leave blank to skip[/dim]",
+        default=""
+    )
+    
+    # Ask about freshness update
+    freshness_update = Confirm.ask("Update year references (e.g., 2025 → 2026)?", default=True)
+    
+    # Ask about schema generation
+    auto_schema = Confirm.ask("Auto-generate JSON-LD schema?", default=True)
+    
+    # Preview transformation
+    console.print()
+    console.print("[bold]Applying transformations...[/bold]")
+    
+    rewriter = GEORewriter()
+    transformed = rewriter.transform(
+        content,
+        answer_capsule=answer_capsule if answer_capsule else None,
+        add_experience=True
+    )
+    
+    # Apply freshness updates
+    if freshness_update:
+        freshness = ContentFreshness()
+        fresh_result = freshness.refresh_content(title, transformed.transformed)
+        if fresh_result.title_changed:
+            title = fresh_result.updated_title
+            transformed.changes_made.append(f"Updated title year to {freshness.current_year}")
+        if fresh_result.content_changed:
+            transformed = rewriter.transform(fresh_result.updated_content)
+            transformed.changes_made.extend(fresh_result.year_updates)
+    
+    # Show changes
+    console.print()
+    console.print("[bold]Changes to be applied:[/bold]")
+    for change in transformed.changes_made:
+        console.print(f"  [green]✓[/green] {change}")
+    
+    if auto_schema:
+        try:
+            site_url, username, _ = get_credentials()
+            author = username.split("@")[0]  # Use username as author
+            schema = generate_schema_for_content(
+                transformed.transformed,
+                title,
+                author
+            )
+            schema_type = schema.get("@type", "Unknown")
+            console.print(f"  [green]✓[/green] Generated {schema_type} schema")
+        except Exception as e:
+            console.print(f"  [yellow]⚠[/yellow] Schema generation failed: {e}")
+            auto_schema = False
+    
+    # Confirm before applying
+    console.print()
+    if not Confirm.ask("[yellow]Apply these changes to WordPress?[/yellow]"):
+        console.print("[dim]Transformation cancelled.[/dim]")
+        return
+    
+    # Create backup and apply
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Creating backup...", total=None)
+            site_url, username, app_password = get_credentials()
+            backup_data = {
+                "post_id": post_id,
+                "original_title": post_data.get("title", {}).get("rendered", ""),
+                "original_content": content
+            }
+            backup_path = create_backup(backup_data, "backups", "geo_transform")
+            progress.update(task, description="[green]✓ Backup created[/green]")
+            
+            task = progress.add_task("Updating WordPress...", total=None)
+            update_data = {"content": transformed.transformed}
+            if freshness_update and title != post_data.get("title", {}).get("rendered", ""):
+                update_data["title"] = title
+            
+            update_post(site_url, post_id, username, app_password, update_data)
+            progress.update(task, description="[green]✓ Post updated[/green]")
+        
+        console.print()
+        console.print(Panel(
+            f"[green]✅ GEO Transformation Complete![/green]\n\n"
+            f"Post ID: {post_id}\n"
+            f"Changes: {len(transformed.changes_made)}\n"
+            f"Backup: {backup_path}",
+            title="Success",
+            border_style="green"
+        ))
+        
+        # Re-audit to show improvement
+        console.print()
+        if Confirm.ask("Re-audit to see score improvement?"):
+            new_result = audit_content(transformed.transformed, title)
+            improvement = new_result.overall_score - result.overall_score
+            if improvement > 0:
+                console.print(f"[green]🎉 Score improved by +{improvement} points![/green]")
+            console.print(f"New score: {new_result.overall_score}/100")
+        
+    except Exception as e:
+        console.print(f"[red]Error applying transformation: {e}[/red]")
+
+
+def _display_quick_score(result):
+    """Display a compact score summary."""
+    score = result.overall_score
+    if score >= 80:
+        color = "green"
+    elif score >= 60:
+        color = "yellow"
+    else:
+        color = "red"
+    console.print(f"  [{color}]Score: {score}/100[/{color}]")
+    for cat, cat_score in result.category_scores.items():
+        console.print(f"    {cat.replace('_', ' ').title()}: {cat_score}")
 
 
 def fix_technical_issues():
