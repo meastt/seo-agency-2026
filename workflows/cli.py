@@ -232,12 +232,147 @@ def fix_technical_issues():
     console.print()
     console.print("[bold]🔧 Technical SEO Fixes[/bold]")
     console.print()
-    console.print("[yellow]⚠ Technical fix module coming soon![/yellow]")
-    console.print("This will:")
-    console.print("  • Fix broken links (404s) with 301 redirects")
-    console.print("  • Link orphan pages to relevant parents")
-    console.print("  • Flatten redirect chains")
-    console.print("  • Submit fixed URLs to IndexNow")
+    
+    # Import here to avoid circular imports
+    from modules.technical.link_fixer import TechnicalFixer, FixResult
+    
+    try:
+        fixer = TechnicalFixer()
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        return
+    
+    # Show submenu
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="cyan bold")
+    table.add_column()
+    
+    table.add_row("[1]", "🔗 Fix broken link (404) - Create 301 redirect")
+    table.add_row("[2]", "📄 Fix orphan page - Link to parent post")
+    table.add_row("[3]", "⛓️  Flatten redirect chain - A→B→C becomes A→C")
+    table.add_row("[b]", "← Back to main menu")
+    
+    console.print(table)
+    console.print()
+    
+    choice = Prompt.ask(
+        "Select fix type",
+        choices=["1", "2", "3", "b"],
+        default="b"
+    )
+    
+    if choice == "b":
+        return
+    
+    if choice == "1":
+        _fix_broken_link(fixer)
+    elif choice == "2":
+        _fix_orphan_page(fixer)
+    elif choice == "3":
+        _fix_redirect_chain(fixer)
+
+
+def _fix_broken_link(fixer):
+    """Handle broken link fix flow."""
+    console.print()
+    console.print("[bold]🔗 Fix Broken Link (404)[/bold]")
+    console.print()
+    
+    broken_url = Prompt.ask("Enter the broken URL path (e.g., /old-page)")
+    redirect_target = Prompt.ask(
+        "Enter redirect target URL (or press Enter to auto-find)",
+        default=""
+    ) or None
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console
+    ) as progress:
+        task = progress.add_task("Creating 301 redirect...", total=None)
+        result = fixer.fix_broken_link(broken_url, redirect_target)
+        progress.update(task, description="Done")
+    
+    _display_fix_result(result)
+
+
+def _fix_orphan_page(fixer):
+    """Handle orphan page fix flow."""
+    console.print()
+    console.print("[bold]📄 Fix Orphan Page[/bold]")
+    console.print()
+    
+    post_id = IntPrompt.ask("Enter the orphan page's post ID")
+    parent_id_str = Prompt.ask(
+        "Enter parent post ID (or press Enter to auto-find)",
+        default=""
+    )
+    parent_id = int(parent_id_str) if parent_id_str else None
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console
+    ) as progress:
+        task = progress.add_task("Adding internal link...", total=None)
+        result = fixer.fix_orphan_page(post_id, parent_id)
+        progress.update(task, description="Done")
+    
+    _display_fix_result(result)
+
+
+def _fix_redirect_chain(fixer):
+    """Handle redirect chain fix flow."""
+    console.print()
+    console.print("[bold]⛓️ Flatten Redirect Chain[/bold]")
+    console.print()
+    
+    start_url = Prompt.ask("Enter the starting URL of the chain")
+    final_url = Prompt.ask("Enter the final destination URL")
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console
+    ) as progress:
+        task = progress.add_task("Flattening redirect chain...", total=None)
+        result = fixer.flatten_redirect_chain(start_url, final_url)
+        progress.update(task, description="Done")
+    
+    _display_fix_result(result)
+
+
+def _display_fix_result(result):
+    """Display the result of a technical fix."""
+    console.print()
+    
+    if result.success:
+        console.print(Panel(
+            f"[green]✅ Fix Applied Successfully[/green]\n\n"
+            f"Type: {result.fix_type}\n"
+            f"Source: {result.source_url}\n"
+            f"Target: {result.target_url}\n"
+            f"Method: {result.method}\n"
+            f"Backup: {result.backup_path}",
+            title="Success",
+            border_style="green"
+        ))
+    else:
+        details_str = ""
+        if result.details:
+            if "htaccess_rule" in result.details:
+                details_str = f"\n\n[yellow]Manual fix required:[/yellow]\n{result.details['htaccess_rule']}"
+        
+        console.print(Panel(
+            f"[red]❌ Fix Failed[/red]\n\n"
+            f"Type: {result.fix_type}\n"
+            f"Source: {result.source_url}\n"
+            f"Error: {result.error}"
+            f"{details_str}",
+            title="Failed",
+            border_style="red"
+        ))
+    
     console.print()
 
 
