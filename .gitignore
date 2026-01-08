@@ -1,0 +1,98 @@
+# ==================================================
+# SEO Agency 2026 - .gitignore
+# SECURITY CRITICAL: Protect credentials from public repo
+# ==================================================
+
+# ==================== CREDENTIALS ====================
+# NEVER commit these - contains WordPress passwords, API keys
+.env
+.env.*
+.env.local
+.env.production
+.env.development
+*.env
+
+# WordPress credentials files
+wp-credentials.json
+credentials.json
+secrets.json
+config.local.json
+
+# API Keys
+*api_key*
+*apikey*
+*.key
+indexnow-key.txt
+
+# ==================== PYTHON ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# ==================== IDE ====================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==================== PROJECT SPECIFIC ====================
+# Backups may contain sensitive content
+backups/
+!backups/.gitkeep
+
+# Reports may contain site-specific data
+reports/
+!reports/.gitkeep
+
+# Cache files
+.cache/
+*.cache
+
+# Log files
+*.log
+logs/
+
+# Ahrefs exports (may contain proprietary data)
+*.csv
+ahrefs_export*.json
+
+# Mission logs with site data
+MISSION_LOG.json
+
+# ==================== TESTING ====================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ==================== MISC ====================
+*.bak
+*.tmp
+*.temp
+Thumbs.db
