@@ -1,0 +1,40 @@
+{
+    "answer_capsule": {
+        "length_chars": {
+            "min": 120,
+            "max": 150
+        },
+        "placement": "immediately_after_h1",
+        "rules": [
+            "no_external_links",
+            "direct_answer_first"
+        ]
+    },
+    "structure": {
+        "pattern": "inverted_pyramid",
+        "max_sentence_length": 20,
+        "max_paragraph_sentences": 4,
+        "h2_requirement": "summary_then_data_point"
+    },
+    "eeat_signals": [
+        "author_credentials_linked_json_ld",
+        "first_person_experiential_language",
+        "original_data_or_statistics",
+        "specific_metrics_over_general_claims"
+    ],
+    "required_schema": [
+        "Product",
+        "Review",
+        "HowTo",
+        "FAQPage"
+    ],
+    "citation_optimization": {
+        "freshness_days": 30,
+        "target_engines": [
+            "perplexity",
+            "claude",
+            "chatgpt"
+        ],
+        "capsule_char_range": "120-150"
+    }
+}
