@@ -529,11 +529,179 @@ def batch_audit():
     console.print()
     console.print("[bold]📋 Batch Audit[/bold]")
     console.print()
-    console.print("[yellow]⚠ Batch audit module coming soon![/yellow]")
-    console.print("This will:")
-    console.print("  • Audit all posts in a category")
-    console.print("  • Generate CSV/JSON report")
-    console.print("  • Prioritize posts by improvement potential")
+    
+    from modules.geo.batch_auditor import BatchAuditor
+    from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn
+    
+    try:
+        auditor = BatchAuditor()
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        return
+    
+    # Show submenu
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="cyan bold")
+    table.add_column()
+    
+    table.add_row("[1]", "📁 Audit posts in a category")
+    table.add_row("[2]", "🔢 Audit specific post IDs")
+    table.add_row("[b]", "← Back to main menu")
+    
+    console.print(table)
+    console.print()
+    
+    choice = Prompt.ask(
+        "Select audit type",
+        choices=["1", "2", "b"],
+        default="b"
+    )
+    
+    if choice == "b":
+        return
+    
+    if choice == "1":
+        _batch_audit_category(auditor)
+    elif choice == "2":
+        _batch_audit_ids(auditor)
+
+
+def _batch_audit_category(auditor):
+    """Audit all posts in a category."""
+    from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn
+    
+    console.print()
+    category_id = IntPrompt.ask("Enter category ID to audit")
+    max_posts = IntPrompt.ask("Maximum posts to audit", default=20)
+    
+    console.print()
+    
+    with Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console
+    ) as progress:
+        task = progress.add_task("Auditing posts...", total=max_posts)
+        
+        def on_progress(current, total):
+            progress.update(task, completed=current, total=total)
+        
+        report = auditor.audit_category(category_id, max_posts, on_progress)
+    
+    _display_batch_report(auditor, report)
+
+
+def _batch_audit_ids(auditor):
+    """Audit specific post IDs."""
+    from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn
+    
+    console.print()
+    ids_str = Prompt.ask("Enter post IDs (comma-separated, e.g., 123,456,789)")
+    
+    try:
+        post_ids = [int(x.strip()) for x in ids_str.split(",") if x.strip()]
+    except ValueError:
+        console.print("[red]Invalid post IDs. Use comma-separated numbers.[/red]")
+        return
+    
+    if not post_ids:
+        console.print("[red]No valid post IDs provided.[/red]")
+        return
+    
+    console.print()
+    
+    with Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console
+    ) as progress:
+        task = progress.add_task("Auditing posts...", total=len(post_ids))
+        
+        def on_progress(current, total):
+            progress.update(task, completed=current, total=total)
+        
+        report = auditor.audit_post_ids(post_ids, on_progress)
+    
+    _display_batch_report(auditor, report)
+
+
+def _display_batch_report(auditor, report):
+    """Display batch audit report and offer export."""
+    console.print()
+    
+    # Summary panel
+    if report.average_score >= 70:
+        score_color = "green"
+    elif report.average_score >= 40:
+        score_color = "yellow"
+    else:
+        score_color = "red"
+    
+    console.print(Panel(
+        f"[bold]Batch Audit Complete[/bold]\n\n"
+        f"Posts audited: {report.audited_posts}/{report.total_posts}\n"
+        f"Failed: {report.failed_posts}\n\n"
+        f"[{score_color}]Average Score: {report.average_score:.1f}/100[/{score_color}]\n\n"
+        f"[red]High priority: {report.high_priority_count}[/red]\n"
+        f"[yellow]Medium priority: {report.medium_priority_count}[/yellow]\n"
+        f"[green]Low priority: {report.low_priority_count}[/green]",
+        title="Summary",
+        border_style="blue"
+    ))
+    
+    # Results table (top 10)
+    if report.results:
+        console.print()
+        console.print("[bold]Top Priority Posts[/bold] (sorted by improvement potential)")
+        
+        results_table = Table(show_header=True)
+        results_table.add_column("ID", style="dim")
+        results_table.add_column("Title", max_width=40)
+        results_table.add_column("Score", justify="right")
+        results_table.add_column("Priority")
+        results_table.add_column("Issues", justify="right")
+        
+        for result in report.results[:10]:
+            if result.priority == "high":
+                priority_display = "[red]HIGH[/red]"
+            elif result.priority == "medium":
+                priority_display = "[yellow]MED[/yellow]"
+            else:
+                priority_display = "[green]LOW[/green]"
+            
+            title_display = result.title[:37] + "..." if len(result.title) > 40 else result.title
+            
+            results_table.add_row(
+                str(result.post_id),
+                title_display,
+                str(result.overall_score),
+                priority_display,
+                f"{result.error_count}E/{result.warning_count}W"
+            )
+        
+        console.print(results_table)
+        
+        if len(report.results) > 10:
+            console.print(f"[dim]...and {len(report.results) - 10} more posts[/dim]")
+    
+    # Export options
+    console.print()
+    export_choice = Prompt.ask(
+        "Export report?",
+        choices=["csv", "json", "both", "none"],
+        default="none"
+    )
+    
+    if export_choice in ["csv", "both"]:
+        csv_path = auditor.save_report_csv(report)
+        console.print(f"[green]✓[/green] Saved CSV: {csv_path}")
+    
+    if export_choice in ["json", "both"]:
+        json_path = auditor.save_report_json(report)
+        console.print(f"[green]✓[/green] Saved JSON: {json_path}")
+    
     console.print()
 
 
